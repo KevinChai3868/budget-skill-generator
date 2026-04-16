@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>經費概算 Skill 產生器</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --blue:    #2563eb;
+    --blue-lt: #eff6ff;
+    --blue-dk: #1d4ed8;
+    --green:   #16a34a;
+    --red:     #dc2626;
+    --gray-50: #f8fafc;
+    --gray-100:#f1f5f9;
+    --gray-200:#e2e8f0;
+    --gray-400:#94a3b8;
+    --gray-600:#475569;
+    --gray-800:#1e293b;
+    --shadow:  0 1px 3px rgba(0,0,0,.1), 0 1px 2px rgba(0,0,0,.06);
+    --shadow-md:0 4px 6px rgba(0,0,0,.07), 0 2px 4px rgba(0,0,0,.06);
+  }
+
+  body {
+    font-family: 'Segoe UI', 'PingFang TC', 'Microsoft JhengHei', sans-serif;
+    background: var(--gray-50);
+    color: var(--gray-800);
+    min-height: 100vh;
+  }
+
+  /* ── Header ── */
+  header {
+    background: var(--blue);
+    color: #fff;
+    padding: 1.25rem 2rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    box-shadow: var(--shadow-md);
+  }
+  header svg { flex-shrink: 0; }
+  header h1  { font-size: 1.35rem; font-weight: 700; letter-spacing: .02em; }
+  header p   { font-size: .85rem; opacity: .85; margin-top: .15rem; }
+
+  /* ── Layout ── */
+  main {
+    max-width: 920px;
+    margin: 2rem auto;
+    padding: 0 1.25rem 4rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.75rem;
+  }
+
+  /* ── Card ── */
+  .card {
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+    padding: 1.5rem;
+  }
+  .card-title {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--blue);
+    margin-bottom: 1.25rem;
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+  }
+  .card-title::before {
+    content: '';
+    display: inline-block;
+    width: 4px;
+    height: 18px;
+    background: var(--blue);
+    border-radius: 2px;
+  }
+
+  /* ── Upload grid ── */
+  .upload-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 1rem;
+  }
+
+  .upload-zone {
+    border: 2px dashed var(--gray-200);
+    border-radius: 10px;
+    padding: 1.25rem 1rem;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color .2s, background .2s;
+    position: relative;
+  }
+  .upload-zone:hover, .upload-zone.dragover {
+    border-color: var(--blue);
+    background: var(--blue-lt);
+  }
+  .upload-zone.uploaded {
+    border-color: var(--green);
+    background: #f0fdf4;
+  }
+  .upload-zone input[type=file] {
+    position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%;
+  }
+  .upload-zone .zone-icon { font-size: 2rem; margin-bottom: .5rem; }
+  .upload-zone .zone-label {
+    font-size: .8rem;
+    font-weight: 700;
+    color: var(--blue);
+    margin-bottom: .3rem;
+    display: inline-block;
+    background: var(--blue-lt);
+    padding: .15rem .5rem;
+    border-radius: 4px;
+  }
+  .upload-zone .zone-name {
+    font-size: .9rem;
+    font-weight: 600;
+    margin: .4rem 0 .2rem;
+  }
+  .upload-zone .zone-hint {
+    font-size: .78rem;
+    color: var(--gray-600);
+    line-height: 1.5;
+  }
+  .upload-zone .zone-filename {
+    font-size: .8rem;
+    color: var(--green);
+    font-weight: 600;
+    margin-top: .4rem;
+    word-break: break-all;
+  }
+
+  /* ── Form ── */
+  .form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+  }
+  @media (max-width: 560px) { .form-grid { grid-template-columns: 1fr; } }
+
+  .form-group { display: flex; flex-direction: column; gap: .35rem; }
+  .form-group label {
+    font-size: .85rem;
+    font-weight: 600;
+    color: var(--gray-800);
+  }
+  .form-group .hint {
+    font-size: .75rem;
+    color: var(--gray-400);
+  }
+  .form-group input, .form-group textarea {
+    border: 1.5px solid var(--gray-200);
+    border-radius: 7px;
+    padding: .55rem .75rem;
+    font-size: .9rem;
+    font-family: inherit;
+    transition: border-color .15s;
+    outline: none;
+  }
+  .form-group input:focus, .form-group textarea:focus {
+    border-color: var(--blue);
+  }
+  .form-group textarea { resize: vertical; min-height: 72px; }
+
+  /* ── Submit button ── */
+  .btn-generate {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: .5rem;
+    background: var(--blue);
+    color: #fff;
+    border: none;
+    border-radius: 9px;
+    padding: .85rem 2.5rem;
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background .15s, transform .1s;
+    width: 100%;
+    letter-spacing: .03em;
+  }
+  .btn-generate:hover { background: var(--blue-dk); }
+  .btn-generate:active { transform: scale(.98); }
+  .btn-generate:disabled { background: var(--gray-400); cursor: not-allowed; }
+
+  /* ── Loading spinner ── */
+  .spinner {
+    width: 18px; height: 18px;
+    border: 2.5px solid rgba(255,255,255,.4);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin .7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Result card ── */
+  #result-card { display: none; }
+
+  .summary-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .5rem;
+    margin-bottom: 1rem;
+  }
+  .chip {
+    background: var(--blue-lt);
+    color: var(--blue);
+    font-size: .8rem;
+    font-weight: 600;
+    padding: .25rem .65rem;
+    border-radius: 20px;
+  }
+
+  .download-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .75rem;
+    margin-bottom: 1.25rem;
+  }
+  .btn-dl {
+    display: inline-flex;
+    align-items: center;
+    gap: .4rem;
+    padding: .6rem 1.2rem;
+    border-radius: 8px;
+    font-size: .88rem;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    text-decoration: none;
+    transition: opacity .15s;
+  }
+  .btn-dl:hover { opacity: .85; }
+  .btn-dl-skill { background: var(--blue); color: #fff; }
+  .btn-dl-excel { background: #166534; color: #fff; }
+  .btn-dl-copy  { background: var(--gray-100); color: var(--gray-800); border: 1.5px solid var(--gray-200); }
+
+  .skill-preview {
+    background: var(--gray-50);
+    border: 1.5px solid var(--gray-200);
+    border-radius: 8px;
+    padding: 1rem;
+    font-family: 'Consolas', 'Courier New', monospace;
+    font-size: .78rem;
+    line-height: 1.6;
+    max-height: 380px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+    color: var(--gray-800);
+  }
+
+  /* ── Toast ── */
+  #toast {
+    position: fixed;
+    bottom: 1.5rem;
+    left: 50%;
+    transform: translateX(-50%) translateY(80px);
+    background: var(--gray-800);
+    color: #fff;
+    padding: .65rem 1.25rem;
+    border-radius: 8px;
+    font-size: .88rem;
+    font-weight: 600;
+    transition: transform .3s ease;
+    z-index: 999;
+    pointer-events: none;
+  }
+  #toast.show { transform: translateX(-50%) translateY(0); }
+
+  /* ── Error banner ── */
+  .error-banner {
+    background: #fef2f2;
+    border: 1.5px solid #fecaca;
+    color: var(--red);
+    border-radius: 8px;
+    padding: .75rem 1rem;
+    font-size: .88rem;
+    display: none;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
+    <rect width="36" height="36" rx="8" fill="rgba(255,255,255,.2)"/>
+    <path d="M9 10h18M9 14h14M9 18h18M9 22h10M9 26h14" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+  </svg>
+  <div>
+    <h1>經費概算 Skill 產生器</h1>
+    <p>上傳三份文件，自動產生 Claude Code Skill 檔及概算表</p>
+  </div>
+</header>
+
+<main>
+
+  <!-- ① 上傳檔案 -->
+  <div class="card">
+    <div class="card-title">上傳檔案</div>
+    <div class="upload-grid">
+
+      <div class="upload-zone" id="zone-basis" onclick="triggerInput('input-basis')">
+        <input type="file" id="input-basis" accept=".md,.txt" onchange="onFileChange(this,'zone-basis','label-basis')">
+        <div class="zone-icon">📋</div>
+        <span class="zone-label">基準表</span>
+        <div class="zone-name">委辦補助.md</div>
+        <div class="zone-hint">國教署補助標準<br>（.md 或 .txt）</div>
+        <div class="zone-filename" id="label-basis"></div>
+      </div>
+
+      <div class="upload-zone" id="zone-doc" onclick="triggerInput('input-doc')">
+        <input type="file" id="input-doc" accept=".docx,.doc" onchange="onFileChange(this,'zone-doc','label-doc')">
+        <div class="zone-icon">📄</div>
+        <span class="zone-label">計畫文件</span>
+        <div class="zone-name">範例.docx</div>
+        <div class="zone-hint">計畫活動說明<br>（.docx）</div>
+        <div class="zone-filename" id="label-doc"></div>
+      </div>
+
+      <div class="upload-zone" id="zone-template" onclick="triggerInput('input-template')">
+        <input type="file" id="input-template" accept=".xlsx,.xls" onchange="onFileChange(this,'zone-template','label-template')">
+        <div class="zone-icon">📊</div>
+        <span class="zone-label">概算表</span>
+        <div class="zone-name">經費編列表.xlsx</div>
+        <div class="zone-hint">空白概算表範本<br>（.xlsx）</div>
+        <div class="zone-filename" id="label-template"></div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ② 基本資料 -->
+  <div class="card">
+    <div class="card-title">基本資料</div>
+    <div class="form-grid">
+      <div class="form-group">
+        <label for="school_name">學校名稱</label>
+        <span class="hint">填入後會帶入概算表標題（選填）</span>
+        <input type="text" id="school_name" placeholder="例：臺中市立清水高中">
+      </div>
+      <div class="form-group">
+        <label for="fiscal_year">會計年度</label>
+        <span class="hint">如不填寫，概算表年度欄位留空</span>
+        <input type="text" id="fiscal_year" placeholder="例：114">
+      </div>
+      <div class="form-group" style="grid-column:1/-1">
+        <label for="note">備註說明</label>
+        <span class="hint">其他需要注意的事項，會附加到 Skill 檔尾端（選填）</span>
+        <textarea id="note" placeholder="例：本計畫屬補助案件，主持費原則不補助。"></textarea>
+      </div>
+    </div>
+  </div>
+
+  <!-- ③ 錯誤顯示 -->
+  <div class="error-banner" id="error-banner"></div>
+
+  <!-- ④ 產生按鈕 -->
+  <button class="btn-generate" id="btn-gen" onclick="generate()">
+    <span id="btn-icon">⚡</span>
+    <span id="btn-text">產生 Skill 檔 & 概算表</span>
+  </button>
+
+  <!-- ⑤ 結果 -->
+  <div class="card" id="result-card">
+    <div class="card-title">產生結果</div>
+
+    <div class="summary-chips" id="summary-chips"></div>
+
+    <div class="download-row">
+      <a id="dl-skill" class="btn-dl btn-dl-skill" href="#" download="SKILL.md">
+        ⬇ 下載 SKILL.md
+      </a>
+      <a id="dl-excel" class="btn-dl btn-dl-excel" href="#" download="概算表.xlsx" style="display:none">
+        ⬇ 下載概算表.xlsx
+      </a>
+      <button class="btn-dl btn-dl-copy" onclick="copySkill()">
+        📋 複製 Skill 內容
+      </button>
+    </div>
+
+    <details open>
+      <summary style="cursor:pointer;font-size:.85rem;font-weight:600;color:var(--gray-600);margin-bottom:.75rem;">
+        預覽 SKILL.md 內容
+      </summary>
+      <pre class="skill-preview" id="skill-preview"></pre>
+    </details>
+  </div>
+
+</main>
+
+<div id="toast"></div>
+
+<script>
+let currentToken = null;
+let skillContent = '';
+
+function triggerInput(id) {
+  document.getElementById(id).click();
+}
+
+function onFileChange(input, zoneId, labelId) {
+  const zone  = document.getElementById(zoneId);
+  const label = document.getElementById(labelId);
+  if (input.files.length) {
+    zone.classList.add('uploaded');
+    label.textContent = '✓ ' + input.files[0].name;
+  } else {
+    zone.classList.remove('uploaded');
+    label.textContent = '';
+  }
+}
+
+// Drag & drop
+document.querySelectorAll('.upload-zone').forEach(zone => {
+  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+  zone.addEventListener('drop', e => {
+    e.preventDefault();
+    zone.classList.remove('dragover');
+    const zoneId = zone.id;
+    const inputId = 'input-' + zoneId.replace('zone-','');
+    const input = document.getElementById(inputId);
+    if (e.dataTransfer.files.length) {
+      input.files = e.dataTransfer.files;
+      onFileChange(input, zoneId, 'label-' + zoneId.replace('zone-',''));
+    }
+  });
+});
+
+async function generate() {
+  const basis    = document.getElementById('input-basis').files[0];
+  const doc      = document.getElementById('input-doc').files[0];
+  const template = document.getElementById('input-template').files[0];
+
+  hideError();
+
+  if (!basis || !doc || !template) {
+    showError('請上傳所有三份必要檔案（基準表、計畫文件、概算表）');
+    return;
+  }
+
+  setLoading(true);
+
+  const fd = new FormData();
+  fd.append('basis',       basis);
+  fd.append('doc',         doc);
+  fd.append('template',    template);
+  fd.append('school_name', document.getElementById('school_name').value);
+  fd.append('fiscal_year', document.getElementById('fiscal_year').value);
+  fd.append('note',        document.getElementById('note').value);
+
+  try {
+    const res  = await fetch('/api/generate', { method: 'POST', body: fd });
+    const data = await res.json();
+
+    if (!res.ok) {
+      showError(data.error || '處理失敗，請確認檔案格式正確');
+      return;
+    }
+
+    currentToken = data.token;
+    skillContent = data.skill_content;
+
+    renderSummary(data.summary);
+    document.getElementById('skill-preview').textContent = skillContent;
+
+    // Download links
+    document.getElementById('dl-skill').href = `/api/download/${currentToken}/skill`;
+    if (data.has_excel) {
+      const excelBtn = document.getElementById('dl-excel');
+      excelBtn.href  = `/api/download/${currentToken}/excel`;
+      excelBtn.style.display = '';
+    }
+
+    document.getElementById('result-card').style.display = '';
+    document.getElementById('result-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    showToast('✅ 產生完成！');
+
+  } catch (err) {
+    showError('連線失敗：' + err.message);
+  } finally {
+    setLoading(false);
+  }
+}
+
+function renderSummary(summary) {
+  const chips = document.getElementById('summary-chips');
+  chips.innerHTML = '';
+  const items = [
+    ['子計畫代碼', summary.plan_code],
+    ['PART1（8-12月）', summary.part1_code],
+    ['PART2（1-7月）',  summary.part2_code],
+    ['每學期活動', summary.both_codes?.join('、') || '—'],
+  ];
+  items.forEach(([label, val]) => {
+    if (val && val !== 'null' && val !== 'undefined') {
+      const chip = document.createElement('span');
+      chip.className = 'chip';
+      chip.textContent = `${label}：${val}`;
+      chips.appendChild(chip);
+    }
+  });
+  if (summary.sheets?.length) {
+    const chip = document.createElement('span');
+    chip.className = 'chip';
+    chip.textContent = `工作表：${summary.sheets.length} 張`;
+    chips.appendChild(chip);
+  }
+}
+
+function copySkill() {
+  if (!skillContent) return;
+  navigator.clipboard.writeText(skillContent)
+    .then(() => showToast('✅ 已複製到剪貼簿'))
+    .catch(() => showToast('❌ 複製失敗，請手動選取'));
+}
+
+function setLoading(on) {
+  const btn = document.getElementById('btn-gen');
+  const icon = document.getElementById('btn-icon');
+  const text = document.getElementById('btn-text');
+  btn.disabled = on;
+  if (on) {
+    icon.outerHTML = '<span class="spinner" id="btn-icon"></span>';
+    text.textContent = '處理中...';
+  } else {
+    document.getElementById('btn-icon').outerHTML = '<span id="btn-icon">⚡</span>';
+    text.textContent = '產生 Skill 檔 & 概算表';
+  }
+}
+
+function showError(msg) {
+  const el = document.getElementById('error-banner');
+  el.textContent = '⚠ ' + msg;
+  el.style.display = '';
+}
+function hideError() {
+  document.getElementById('error-banner').style.display = 'none';
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2800);
+}
+</script>
+</body>
+</html>
