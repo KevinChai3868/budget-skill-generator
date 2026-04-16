@@ -476,10 +476,10 @@ async function generate() {
     if (data.has_excel) {
       const excelBtn = document.getElementById('dl-excel');
       excelBtn.href  = `/api/download/${currentToken}/excel`;
-      excelBtn.style.display = '';
+      excelBtn.style.display = 'inline-flex';
     }
 
-    document.getElementById('result-card').style.display = '';
+    document.getElementById('result-card').style.display = 'block';
     document.getElementById('result-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
     showToast('✅ 產生完成！');
 
