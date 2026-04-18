@@ -126,7 +126,9 @@ class BudgetProcessor:
             'code':               code,
             'paragraphs':         paragraphs,
             'expenses':           self._extract_expenses(paragraphs),
-            'has_every_semester': '每學期' in full_text,
+            'has_every_semester':  '每學期' in full_text,
+            'has_upper_semester':  '上學期' in full_text and '每學期' not in full_text,
+            'has_lower_semester':  '下學期' in full_text and '每學期' not in full_text,
             'full_text':          full_text,
         }
         if section_type == 'PART1':
@@ -278,19 +280,24 @@ for t_idx, table in enumerate(doc.tables):
 
 #### 2-1 文件結構（固定標記）
 
-| 標記 | 對應學期 | 目標工作表 |
-|------|----------|------------|
-| `PART1` | 8-12月 | 含「{plan_code}」且含「8-12月」的工作表 |
-| `PART2` | 1-7月 | 含「{plan_code}」且含「1-7月」的工作表 |
+**學期定義**：上學期 = 8-12月、下學期 = 1-7月、每學期 = 上學期及下學期皆編列
 
-#### 2-2 「每學期」規則
+| 標記/關鍵詞 | 對應學期 | 目標工作表 |
+|-------------|----------|------------|
+| `PART1` 或描述含「**上學期**」 | 上學期（8-12月） | `{plan_code}(8-12月)` |
+| `PART2` 或描述含「**下學期**」 | 下學期（1-7月） | `{plan_code}(1-7月)` |
+| 描述含「**每學期**」 | 上學期＋下學期 | `{plan_code}(8-12月)` **及** `{plan_code}(1-7月)` |
+
+**子計畫整合規則**：相同首字母的所有子計畫（如 {plan_code}-1-1、{plan_code}-1-2、{plan_code}-2-1）**整合至同一張工作表**，在「說明用途」欄以代碼分段標註。
+
+#### 2-2 學期編列規則
 
 | 文件描述 | 處理方式 |
 |----------|----------|
-| 段落標記 `PART1` | 只填 **8-12月** 工作表 |
-| 段落標記 `PART2` | 只填 **1-7月** 工作表 |
+| 段落標記 `PART1` 或含「上學期」 | 只填 **`{plan_code}(8-12月)`** 工作表 |
+| 段落標記 `PART2` 或含「下學期」 | 只填 **`{plan_code}(1-7月)`** 工作表 |
 | 描述中含「**每學期**」 | **同時填入兩張工作表**，各自以當學期數量計算 |
-| 無標記也無「每學期」 | 詢問使用者確認 |
+| 無標記也無學期關鍵詞 | 詢問使用者確認 |
 
 「每學期 N 場次」→ 每張工作表各填 N 場次（不跨學期加總）
 
@@ -414,8 +421,11 @@ items_cap_y11 = []
 items_cap_y12 = []
 
 sheet_names = wb.sheetnames
-y11 = next((s for s in sheet_names if '{plan_code}' in s and ('8-12' in s or 'y-1-1' in s)), None)
-y12 = next((s for s in sheet_names if '{plan_code}' in s and ('1-7' in s or 'y-1-2' in s)), None)
+# 優先找新命名格式 {plan_code}(8-12月)，找不到再找舊格式
+y11 = next((s for s in sheet_names if s == '{plan_code}(8-12月)'), None) \
+   or next((s for s in sheet_names if '{plan_code}' in s and ('8-12' in s or 'y-1-1' in s)), None)
+y12 = next((s for s in sheet_names if s == '{plan_code}(1-7月)'), None) \
+   or next((s for s in sheet_names if '{plan_code}' in s and ('1-7' in s or 'y-1-2' in s)), None)
 
 if y11: write_sheet(wb[y11], items_y11, items_cap_y11)
 if y12: write_sheet(wb[y12], items_y12, items_cap_y12)
@@ -478,12 +488,9 @@ for s in wb.sheetnames:
             src_wb    = openpyxl.load_workbook(src_path)
             sheets    = src_wb.sheetnames
 
-            # Find target sheets
-            y11_name = next((s for s in sheets if plan_code in s and ('8-12' in s or 'y-1-1' in s)), None)
-            y12_name = next((s for s in sheets if plan_code in s and ('1-7'  in s or 'y-1-2' in s)), None)
-
-            if not y11_name and not y12_name:
-                return None
+            # 統一使用新命名格式 {plan_code}(8-12月) / {plan_code}(1-7月)
+            y11_name = f'{plan_code}(8-12月)'
+            y12_name = f'{plan_code}(1-7月)'
 
             # Build expense items from parsed sections
             part1    = doc_info['sections']['PART1']
@@ -501,15 +508,13 @@ for s in wb.sheetnames:
             if 'Example' in sheets:
                 self._copy_sheet(src_wb['Example'], new_wb, 'Example')
 
-            if y11_name:
-                ws = new_wb.create_sheet(title=y11_name)
-                self._init_header(ws, plan_code, '8-12月', self.school_name, self.fiscal_year)
-                self._write_items(ws, items_y11['regular'], items_y11['capital'])
+            ws = new_wb.create_sheet(title=y11_name)
+            self._init_header(ws, plan_code, '8-12月', self.school_name, self.fiscal_year)
+            self._write_items(ws, items_y11['regular'], items_y11['capital'])
 
-            if y12_name:
-                ws = new_wb.create_sheet(title=y12_name)
-                self._init_header(ws, plan_code, '1-7月', self.school_name, self.fiscal_year)
-                self._write_items(ws, items_y12['regular'], items_y12['capital'])
+            ws = new_wb.create_sheet(title=y12_name)
+            self._init_header(ws, plan_code, '1-7月', self.school_name, self.fiscal_year)
+            self._write_items(ws, items_y12['regular'], items_y12['capital'])
 
             out_path = os.path.join(os.path.dirname(src_path), 'generated.xlsx')
             new_wb.save(out_path)
